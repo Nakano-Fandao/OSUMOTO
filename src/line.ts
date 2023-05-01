@@ -39,9 +39,14 @@ const textEventHandler = async (event: WebhookEvent): Promise<MessageAPIResponse
   const senderName = await extractSenderName(userId, groupId);
 
   // chatGPTに投げる
-  const res = await ask(`${senderName}:${text}`)
+  let res = await ask(`${senderName}:${text}`)
 
-  const response: TextMessage = {type: 'text', text: res};
+  // 回答文を加工
+  if (new RegExp(`^${channelBotName}[:：]*`).test(res)) {
+    res = res.replace(channelBotName, '').substring(1);
+  }
+
+  const response: TextMessage = {type: 'text', text: res.trim()};
   await lineClient.replyMessage(event.replyToken, response);
 };
 
