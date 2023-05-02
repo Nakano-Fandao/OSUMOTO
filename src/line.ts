@@ -3,9 +3,11 @@ import {
   WebhookEvent,
   TextMessage,
   MessageAPIResponseBase,
+  ImageMessage,
 } from '@line/bot-sdk';
 import { load } from 'ts-dotenv';
 import { ask } from './gpt';
+import { generateArt } from './stable-diffusion';
 
 const env = load({
   CHANNEL_ACCESS_TOKEN: String,
@@ -26,15 +28,25 @@ const groupMemberMap = new Map<string, string>();
 const textEventHandler = async (event: WebhookEvent): Promise<MessageAPIResponseBase | undefined> => {
   if (event.type !== 'message' || event.message.type !== 'text') return;
 
+  // groupチャットでなければ、return
+  if (event.source.type !== 'group') return;
+  const {userId, groupId } = event.source;
+  if (!userId) return;
+
   const { text } = event.message;
   // 冒頭がbotの名前でなければ、return
   if (!text.startsWith(channelBotName)) return;
 
-  // groupチャットでなければ、return
-  if (event.source.type !== 'group') return;
-  const { userId, groupId } = event.source;
-  if (!userId) return
+  let response: TextMessage | ImageMessage;
+  if (text.startsWith(`${channelBotName}画伯`)) {
+    response = await useStableDiffusion(text.replace(`${channelBotName}画伯`, "").trim())
+  } else {
+    response = await useChatGpt(userId, groupId, text)
+  }
+  await lineClient.replyMessage(event.replyToken, response);
+};
 
+const useChatGpt = async (userId: string, groupId: string, text: string): Promise<TextMessage> => {
   // 直前の送信者の名前を抽出
   const senderName = await extractSenderName(userId, groupId);
 
@@ -45,10 +57,20 @@ const textEventHandler = async (event: WebhookEvent): Promise<MessageAPIResponse
   if (new RegExp(`^${channelBotName}[:：]*`).test(res)) {
     res = res.replace(channelBotName, '').substring(1);
   }
+  return {
+    type: 'text',
+    text: res.trim()
+  };
+}
 
-  const response: TextMessage = {type: 'text', text: res.trim()};
-  await lineClient.replyMessage(event.replyToken, response);
-};
+const useStableDiffusion = async (prompt: string): Promise<ImageMessage> => {
+  const imageUrl = await generateArt(prompt);
+  return {
+    type: 'image',
+    originalContentUrl: encodeURI(imageUrl),
+    previewImageUrl: encodeURI(imageUrl)
+  };
+}
 
 /**
  * 送信者の名前を抽出して返す

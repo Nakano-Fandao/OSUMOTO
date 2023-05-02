@@ -4,6 +4,8 @@ import { lineBotConfig, textEventHandler } from './line';
 
 import { load } from 'ts-dotenv';
 import { checkAsk } from './gpt';
+import { checkGenerateArt, generateArt } from './stable-diffusion';
+import { uploadImage } from './google';
 const env = load({
   PORT: String,
 });
@@ -14,6 +16,12 @@ const app: Application = express();
 app.get('/', async (req: Request, res: Response) => {
   const message = await checkAsk("Hello")
   res.send(message)
+});
+
+app.get('/image', async (req: Request, res: Response) => {
+  const prompt = 'a dog walking on the beach with sunglasses, portrait, ultra realistic, futuristic background , concept art, intricate details, highly detailed';
+  const imageUrl = await checkGenerateArt(prompt);
+  res.send(encodeURI(imageUrl))
 });
 
 app.post('/webhook', middleware(lineBotConfig),
